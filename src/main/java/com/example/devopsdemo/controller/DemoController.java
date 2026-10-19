@@ -6,8 +6,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class DemoController {
 
-    @GetMapping("/hello")
-    public String hello() {
-        return "DevOps demo application is running!";
-    }
+@GetMapping("/hello")
+public String hello() {
+    return "DevOps demo - AUTOMATED DEPLOYMENT WORKS! 🚀";
+}
+
 }
