@@ -1,9 +1,9 @@
 version: 2.1
 
+orbs:
+  snyk: snyk/snyk@2.3.0
+
 jobs:
-  # ==========================================
-  # BUILD JOB - Compile and package
-  # ==========================================
   build:
     docker:
       - image: cimg/openjdk:21.0
@@ -27,9 +27,6 @@ jobs:
           paths:
             - target/*.jar
 
-  # ==========================================
-  # TEST JOB - Run automated tests
-  # ==========================================
   test:
     docker:
       - image: cimg/openjdk:21.0
@@ -50,8 +47,36 @@ jobs:
           path: target/surefire-reports
 
   # ==========================================
-  # PUBLISH JOB - Build and push Docker image
+  # SNYK_SCAN JOB - Snyk: scan Maven dependencies
   # ==========================================
+  snyk_scan:
+    docker:
+      - image: cimg/openjdk:21.0
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - maven-deps-{{ checksum "pom.xml" }}
+            - maven-deps-
+      - snyk/scan:
+          severity-threshold: high
+          cli-version: 1.1308.1
+          monitor-on-build: false
+
+  # ==========================================
+  # SNYK_CODE JOB - Snyk Code: static analysis (SAST) of src/
+  # ==========================================
+  snyk_code:
+    docker:
+      - image: cimg/openjdk:21.0
+    steps:
+      - checkout
+      - snyk/scan:
+          command: code test
+          severity-threshold: high
+          cli-version: 1.1308.1
+          monitor-on-build: false
+
   publish:
     docker:
       - image: cimg/base:stable
@@ -73,9 +98,6 @@ jobs:
             echo "Pushing image to Docker Hub..."
             docker push $DOCKER_USERNAME/devops-demo:latest
 
-  # ==========================================
-  # DEPLOY JOB - Tell Railway to redeploy
-  # ==========================================
   deploy:
     docker:
       - image: cimg/node:lts
@@ -87,13 +109,12 @@ jobs:
             npx --yes @railway/cli redeploy --service "$RAILWAY_SERVICE_ID" --yes
             echo "Railway is now pulling $DOCKER_USERNAME/devops-demo:latest from Docker Hub."
 
-# ==========================================
-# WORKFLOW - Run jobs in sequence
-# ==========================================
 workflows:
-  build_test_publish:
+  build_test_scan_publish_deploy:
     jobs:
       - build
+      - snyk_scan
+      - snyk_code
       - test:
           requires:
             - build
@@ -101,7 +122,8 @@ workflows:
           context: docker-hub
           requires:
             - test
+            - snyk_scan
+            - snyk_code
       - deploy:
           requires:
             - publish
-  # ==========================================
